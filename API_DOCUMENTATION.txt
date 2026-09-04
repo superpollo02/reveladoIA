@@ -1,0 +1,63 @@
+====================================================
+ESTUDIO DE REVELADO IA - DOCUMENTACION DE API INTERNA
+====================================================
+
+1. INTRODUCCION
+   Esta aplicacion es una SPA (Single Page Application) basada en 
+   servicios desacoplados. La comunicacion se realiza mediante 
+   una API de servicios en TypeScript.
+
+2. SERVICIO DE IA (geminiService.ts)
+   Encargado de la comunicacion con el modelo Google Gemini.
+
+   * generateImageWithNano(prompt: string, config: Config): Promise<string>
+     - Proposito: Genera una imagen mediante IA.
+     - Parametros: Prompt refinado y objeto de configuracion tecnica.
+     - Retorno: URL (Base64 o Blob) de la imagen generada.
+
+   * refinePrompt(userVision: string): Promise<string>
+     - Proposito: Transforma una idea simple en un prompt tecnico.
+     - Retorno: String optimizado para el modelo de imagen.
+
+   * getMagicSuggestions(currentPrompt: string): Promise<string[]>
+     - Proposito: Analiza el contexto para sugerir palabras clave.
+
+3. SERVICIO DE ALMACENAMIENTO (storageService.ts)
+   Capa de persistencia sobre IndexedDB (Base de datos local).
+
+   * saveImage(image: GeneratedImage): Promise<void>
+     - Guarda el objeto completo incluyendo el Blob de la imagen.
+
+   * getImages(): Promise<GeneratedImage[]>
+     - Recupera el historial completo ordenado por fecha.
+
+   * deleteImage(id: string): Promise<void>
+     - Elimina la entrada fisica y logica del almacenamiento.
+
+4. SERVICIO DE COLOR (colorService.ts)
+   Analisis computacional de la imagen.
+
+   * analyzeImageColorPalette(imageUrl: string): Promise<ColorPalette>
+     - Extrae clusters RGB y genera variables de estilo CSS.
+
+5. MODELO DE DATOS (types.ts)
+   Estructura principal de comunicacion:
+   {
+     id: string,
+     url: string,        // Imagen (DataURL)
+     prompt: string,     // Texto original
+     timestamp: number,  // Fecha creacion
+     tags: string[],     // Etiquetas IA
+     styleId: string,    // Identificador de estilo
+     ...metadatos_tecnicos
+   }
+
+6. INTEROPERABILIDAD (Acciones en Lote)
+   La aplicacion permite gestionar el portafolio de forma masiva:
+   - Exportacion de Imagenes: Disparo secuencial de descargas de archivos .png.
+   - Exportacion de Metadatos: Generacion de un archivo .json unificado con
+     toda la ficha tecnica (Prompt, Seed, Config) de las fotos seleccionadas.
+   - Borrado Masivo: Metodo `onDeleteMultipleImages` para purga eficiente
+     de registros en IndexedDB.
+
+====================================================

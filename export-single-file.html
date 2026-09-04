@@ -1,0 +1,685 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fotógrafo AI Pro - Master Edition</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
+            colors: {
+              nano: {
+                50: '#020617', 100: '#0f172a', 200: '#1e293b', 300: '#334155',
+                400: '#475569', 500: '#64748b', 600: '#94a3b8', 700: '#cbd5e1',
+                800: '#e2e8f0', 900: '#f8fafc',
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      body { background-color: #020617; color: #f8fafc; -webkit-font-smoothing: antialiased; margin: 0; overflow: hidden; }
+      .hide-scrollbar::-webkit-scrollbar { display: none; }
+      .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      input[type="range"] { -webkit-appearance: none; background: transparent; }
+      input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #10b981; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+      input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 2px; }
+      .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.08); }
+      @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+      .animate-float { animation: float 6s ease-in-out infinite; }
+      select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; background-size: 1rem; }
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react-dom": "https://esm.sh/react-dom@19.0.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.474.0",
+        "@google/genai": "https://esm.sh/@google/genai@1.3.0"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import * as Lucide from 'lucide-react';
+        import { GoogleGenAI } from '@google/genai';
+
+        // --- CONSTANTES COMPLETAS ---
+        const ART_STYLES = [
+          { id: 'warm-interior', name: 'Interior Cálido', prompt: 'warm lighting, cozy interior, photorealistic 8k, golden hour, interior design style', gradient: 'from-orange-100 to-amber-50' },
+          { id: 'minimal-studio', name: 'Estudio Mínimo', prompt: 'minimalist studio photography, clean white background, soft box lighting, high key', gradient: 'from-gray-100 to-gray-50' },
+          { id: 'cyberpunk', name: 'Cyberpunk Neon', prompt: 'cyberpunk aesthetic, neon lights, futuristic city rain, high contrast, vibrant glow', gradient: 'from-fuchsia-900 to-purple-900 text-white' },
+          { id: 'analog-film', name: 'Película 35mm', prompt: 'analog photography, 35mm film, kodak portra 400, visible film grain, nostalgic', gradient: 'from-orange-200 to-red-100' },
+          { id: 'bw-noir', name: 'Noir B&N', prompt: 'film noir dramatic shadows, black and white, chiaroscuro lighting, moody noir', gradient: 'from-gray-900 to-black text-white' },
+          { id: 'fantasy-epic', name: 'Fantasía Épica', prompt: 'epic fantasy art, magical lighting, ethereal environment, dungeons and dragons style', gradient: 'from-emerald-900 to-green-900 text-white' },
+          { id: 'anime-style', name: 'Anime Japonés', prompt: 'anime style, studio ghibli inspired, vibrant colors, clean lines, cel shaded', gradient: 'from-pink-300 to-rose-200' },
+          { id: 'oil-painting', name: 'Óleo Clásico', prompt: 'oil painting style, thick brush strokes, textured canvas, classical masterpiece', gradient: 'from-amber-700 to-yellow-600 text-white' },
+          { id: 'daytime-exterior', name: 'Exterior Día', prompt: 'exterior architectural photography, bright natural daylight, blue sky, sharp focus', gradient: 'from-sky-100 to-blue-50' },
+          { id: 'moody-cinematic', name: 'Cine Dramático', prompt: 'cinematic film still, color graded, dramatic shadows, anamorphic lens flare', gradient: 'from-indigo-900 to-slate-800 text-white' },
+          { id: 'watercolor', name: 'Acuarela Suave', prompt: 'watercolor painting, soft edges, paper texture, pastel colors, artistic', gradient: 'from-cyan-100 to-blue-100' },
+          { id: 'isometric', name: 'Isométrico 3D', prompt: 'isometric view, 3d render, low poly, cute miniature world, clean background', gradient: 'from-emerald-100 to-teal-50' },
+          { id: '3d-surreal', name: '3D Surrealista', prompt: '3d render, surrealism, abstract shapes, dreamlike atmosphere, floating elements', gradient: 'from-violet-200 to-indigo-100' },
+          { id: 'night-exterior', name: 'Exterior Noche', prompt: 'night time photography, dramatic artificial lighting, dark shadows, urban atmosphere', gradient: 'from-slate-800 to-gray-900 text-white' },
+          { id: 'natural-portrait', name: 'Retrato Natural', prompt: 'portrait photography, natural window light, soft bokeh background, 85mm lens', gradient: 'from-rose-50 to-pink-50' },
+          { id: 'polaroid', name: 'Polaroid Retro', prompt: 'polaroid photo, vintage camera, direct flash, faded colors, nostalgic', gradient: 'from-yellow-100 to-stone-200' }
+        ];
+
+        const LIGHT_SOURCES = [
+          { id: 'auto', label: 'IA Automático', prompt: '' },
+          { id: 'natural', label: 'Luz Natural', prompt: 'natural sunlight, daylight, organic light' },
+          { id: 'studio', label: 'Estudio Pro', prompt: 'studio continuous lighting, professional softboxes' },
+          { id: 'golden', label: 'Hora Dorada', prompt: 'golden hour, warm sunset glow' },
+          { id: 'blue', label: 'Hora Azul', prompt: 'blue hour twilight lighting, cold tones' },
+          { id: 'neon', label: 'Neón / Cyberpunk', prompt: 'vibrant neon lighting, pink and blue glow' },
+          { id: 'strobe', label: 'Flash / Strobe', prompt: 'strobe flash photography, sharp shadows' },
+          { id: 'volumetric', label: 'Volumétrica', prompt: 'volumetric lighting, god rays through mist' },
+          { id: 'candle', label: 'Velas', prompt: 'candlelight, intimate flickering glow' },
+          { id: 'biolum', label: 'Bioluminiscente', prompt: 'bioluminescent organic glow, ethereal' },
+          { id: 'screen', label: 'Pantalla', prompt: 'screen glow, digital display illumination' },
+          { id: 'fire', label: 'Fuego / Hoguera', prompt: 'firelight, bonfire orange glow' },
+          { id: 'hard', label: 'Luz Dura', prompt: 'hard light, high contrast, sharp shadows' },
+          { id: 'soft', label: 'Luz Suave', prompt: 'soft diffused lighting, low contrast' },
+          { id: 'ring', label: 'Ring Light', prompt: 'ring light, shadowless beauty lighting' },
+          { id: 'window', label: 'Ventana', prompt: 'window light, soft directional sunlight' }
+        ];
+
+        const LIGHT_DIRECTIONS = [
+          { id: 'auto', label: 'IA Automático', prompt: '' },
+          { id: 'frontal', label: 'Frontal', prompt: 'frontal flat lighting' },
+          { id: 'lateral', label: 'Lateral', prompt: 'side lighting, dramatic split' },
+          { id: 'back', label: 'Contraluz', prompt: 'backlighting, rim light silhouette' },
+          { id: 'top', label: 'Cenital', prompt: 'overhead lighting' },
+          { id: 'bottom', label: 'Inferior', prompt: 'uplighting from below, mysterious' },
+          { id: 'rembrandt', label: 'Rembrandt', prompt: 'Rembrandt lighting pattern' },
+          { id: 'butterfly', label: 'Mariposa', prompt: 'butterfly glamour lighting' },
+          { id: 'loop', label: 'Bucle (Loop)', prompt: 'loop lighting studio style' },
+          { id: 'silhouette', label: 'Silueta', prompt: 'silhouette lighting, bright background' },
+          { id: 'threepoint', label: '3 Puntos', prompt: 'standard three-point studio setup' },
+          { id: 'zenithal', label: 'Zenital', prompt: 'zenithal vertical light' }
+        ];
+
+        const ASPECT_RATIOS = [
+          { id: '1:1', label: '1:1', shape: 'w-4 h-4' },
+          { id: '16:9', label: '16:9', shape: 'w-6 h-3.5' },
+          { id: '9:16', label: '9:16', shape: 'w-3.5 h-6' },
+          { id: '4:3', label: '4:3', shape: 'w-5 h-4' },
+          { id: '3:2', label: '3:2', shape: 'w-6 h-4' },
+          { id: '2:3', label: '2:3', shape: 'w-4 h-6' },
+          { id: '3:4', label: '3:4', shape: 'w-4 h-5' },
+          { id: '5:4', label: '5:4', shape: 'w-5 h-4' }
+        ];
+
+        const IMAGE_FILTERS = [
+          { id: 'none', label: 'Sin Filtro', name: 'Normal', filter: 'none', prompt: '' },
+          { id: 'vintage', label: 'Vintage', name: 'Vintage', filter: 'sepia(40%) saturate(85%) hue-rotate(-10deg) brightness(105%) contrast(105%)', prompt: 'vintage aesthetic, sepia tones, nostalgic' },
+          { id: 'noir', label: 'Noir B&N', name: 'Noir', filter: 'grayscale(100%) contrast(160%) brightness(75%)', prompt: 'dramatic black and white, film noir' },
+          { id: 'vivid', label: 'Vívido', name: 'Vívido', filter: 'saturate(160%) contrast(110%) brightness(105%)', prompt: 'vibrant colors, high saturation' },
+          { id: 'cool', label: 'Frío', name: 'Frío', filter: 'saturate(110%) hue-rotate(30deg) brightness(105%)', prompt: 'cool blue tones, crisp lighting' },
+          { id: 'warm', label: 'Cálido', name: 'Cálido', filter: 'sepia(20%) saturate(130%) hue-rotate(-5deg)', prompt: 'warm golden tones, cozy' },
+          { id: 'lofi', label: 'Lo-Fi', name: 'Lofi', filter: 'saturate(80%) contrast(90%) brightness(110%) sepia(10%)', prompt: 'muted colors, soft contrast, lofi aesthetic' },
+          { id: 'cinematic', label: 'Cine Pro', name: 'Cine', filter: 'contrast(120%) saturate(110%) brightness(95%)', prompt: 'teal and orange cinematic grading' },
+          { id: 'faded', label: 'Desvaído', name: 'Desvaído', filter: 'brightness(110%) contrast(85%) saturate(70%)', prompt: 'faded colors, low contrast, matte finish' },
+          { id: 'retro', label: 'Retro 80s', name: 'Retro', filter: 'sepia(30%) contrast(110%) saturate(140%) hue-rotate(-5deg)', prompt: '80s retro style, vibrant neon' },
+          { id: 'grayscale', label: 'B&W', name: 'B&W', filter: 'grayscale(100%) contrast(115%)', prompt: 'black and white photography' },
+          { id: 'sepia', label: 'Sepia', name: 'Sepia', filter: 'sepia(90%) contrast(105%) brightness(95%)', prompt: 'sepia tone, old photograph' },
+          { id: 'dramatic', label: 'Dramático', name: 'Dramático', filter: 'contrast(150%) brightness(85%) saturate(120%)', prompt: 'high contrast, deep shadows' },
+          { id: 'solarize', label: 'Solarizar', name: 'Solar', filter: 'invert(100%) contrast(120%) brightness(110%) hue-rotate(180deg)', prompt: 'solarized effect' }
+        ];
+
+        // --- COMPONENTES UI ---
+        const Badge = ({ text }) => (
+          <div className="flex items-center px-4 py-2 bg-white/5 rounded-2xl border border-white/10 shadow-inner">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-3 animate-pulse"></div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/60">{text}</span>
+          </div>
+        );
+        
+        // ... (Button component omitted as it wasn't modified in Logic but needed for standalone)
+        
+        const ZoomableImage = ({ src }) => {
+          const [scale, setScale] = useState(1);
+          const [pos, setPos] = useState({ x: 0, y: 0 });
+          const [isDragging, setIsDragging] = useState(false);
+          const [start, setStart] = useState({ x: 0, y: 0 });
+
+          return (
+            <div 
+              className="relative w-full h-full flex items-center justify-center overflow-hidden cursor-move group"
+              onPointerDown={e => { if(scale > 1) { setIsDragging(true); setStart({ x: e.clientX - pos.x, y: e.clientY - pos.y }); e.currentTarget.setPointerCapture(e.pointerId); } }}
+              onPointerMove={e => { if(isDragging) setPos({ x: e.clientX - start.x, y: e.clientY - start.y }); }}
+              onPointerUp={e => { setIsDragging(false); e.currentTarget.releasePointerCapture(e.pointerId); }}
+            >
+              <div style={{ transform: `scale(${scale}) translate(${pos.x}px, ${pos.y}px)`, transition: isDragging ? 'none' : 'transform 0.1s ease-out' }} className="max-w-full max-h-full">
+                <img src={src} className="rounded-[3rem] shadow-2xl border border-white/10 object-contain max-h-[75vh]" draggable="false" />
+              </div>
+              <div className="absolute bottom-8 flex gap-4 glass px-6 py-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl">
+                <button onClick={() => { setScale(1); setPos({x:0, y:0}); }} className="hover:text-emerald-400"><Lucide.Maximize size={16}/></button>
+                <button onClick={() => setScale(s => Math.max(1, s - 0.5))} className="hover:text-emerald-400"><Lucide.ZoomOut size={16}/></button>
+                <span className="text-[10px] font-black w-10 text-center">{Math.round(scale * 100)}%</span>
+                <button onClick={() => setScale(s => Math.min(4, s + 0.5))} className="hover:text-emerald-400"><Lucide.ZoomIn size={16}/></button>
+              </div>
+            </div>
+          );
+        };
+
+        const MagicEraser = ({ src, onSave, onCancel }) => {
+          const [activeTab, setActiveTab] = useState('eraser'); // 'eraser', 'adjust', 'filter'
+          const [brightness, setBrightness] = useState(100);
+          const [contrast, setContrast] = useState(100);
+          const [saturation, setSaturation] = useState(100);
+          const [activeFilterId, setActiveFilterId] = useState('none');
+
+          const [brushSize, setBrushSize] = useState(40);
+          const [isProcessing, setIsProcessing] = useState(false);
+          const canvasRef = useRef(null);
+          const imageRef = useRef(null);
+          const [isDrawing, setIsDrawing] = useState(false);
+
+          const getCoords = (e) => {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const scaleX = 1024 / rect.width;
+            const scaleY = 1024 / rect.height;
+            return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+          };
+          
+          const getFilterStyle = () => {
+             const manualFilters = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+             const presetFilter = IMAGE_FILTERS.find(f => f.id === activeFilterId)?.filter || 'none';
+             return presetFilter !== 'none' ? `${manualFilters} ${presetFilter}` : manualFilters;
+          };
+
+          const handleSave = () => {
+             if (!imageRef.current) { onSave(src); return; }
+             const canvas = document.createElement('canvas');
+             const ctx = canvas.getContext('2d');
+             const img = imageRef.current;
+             if (ctx) {
+                 canvas.width = img.naturalWidth;
+                 canvas.height = img.naturalHeight;
+                 ctx.filter = getFilterStyle();
+                 ctx.drawImage(img, 0, 0);
+                 onSave(canvas.toDataURL('image/png'));
+             } else {
+                 onSave(src);
+             }
+          };
+
+          const handleAction = async () => {
+            setIsProcessing(true);
+            try {
+              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+              
+              const maskCanvas = document.createElement('canvas');
+              maskCanvas.width = 1024; maskCanvas.height = 1024;
+              const mCtx = maskCanvas.getContext('2d');
+              
+              mCtx.fillStyle = 'black'; mCtx.fillRect(0,0,1024,1024);
+              mCtx.drawImage(canvasRef.current, 0, 0);
+              
+              const data = mCtx.getImageData(0,0,1024,1024);
+              for(let i=0; i<data.data.length; i+=4) {
+                 const r = data.data[i];
+                 if (r > 50) {
+                     data.data[i] = 255; data.data[i+1] = 255; data.data[i+2] = 255; data.data[i+3] = 255;
+                 } else {
+                     data.data[i] = 0; data.data[i+1] = 0; data.data[i+2] = 0; data.data[i+3] = 255;
+                 }
+              }
+              mCtx.putImageData(data, 0, 0);
+
+              const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                  parts: [
+                    { inlineData: { mimeType: 'image/png', data: src.split(',')[1] } },
+                    { inlineData: { mimeType: 'image/png', data: maskCanvas.toDataURL().split(',')[1] } },
+                    { text: "High-quality object removal. Fill the masked area (white pixels) to match the surrounding background seamlessly. Remove the object completely." }
+                  ]
+                }
+              });
+              const part = response.candidates[0].content.parts.find(p => p.inlineData);
+              if (part) {
+                 // Note: we don't save the filter here, we update the base image for further editing.
+                 // The user can re-apply filters or they persist if state is lifted (simplified here).
+                 // For this standalone, we just pass the new image.
+                 onSave(`data:image/png;base64,${part.inlineData.data}`);
+              }
+            } catch(e) { console.error(e); } finally { setIsProcessing(false); }
+          };
+
+          return (
+            <div className="fixed inset-0 z-[100] bg-nano-50 flex flex-col">
+              <div className="h-20 glass flex items-center justify-between px-8 border-b border-white/10">
+                <button onClick={onCancel} className="p-3 hover:bg-white/10 rounded-xl transition-all"><Lucide.X/></button>
+                <div className="flex gap-4">
+                    <button onClick={handleAction} disabled={isProcessing} className="bg-emerald-500 hover:bg-emerald-400 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50">
+                      {isProcessing ? <Lucide.Loader2 className="animate-spin" size={16}/> : <Lucide.Zap size={16}/>} 
+                      {activeTab === 'eraser' ? 'Borrar Objeto' : 'Refinar'}
+                    </button>
+                    <button onClick={handleSave} className="bg-white hover:bg-gray-200 text-nano-50 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+                      Guardar
+                    </button>
+                </div>
+              </div>
+              
+              <div className="flex-grow flex items-center justify-center p-10 bg-black/40 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-repeat">
+                <div className="relative aspect-square max-h-full rounded-3xl overflow-hidden border border-white/5 shadow-3xl bg-nano-100">
+                  <img 
+                      ref={imageRef}
+                      src={src} 
+                      className="h-full object-contain pointer-events-none transition-all duration-300" 
+                      style={{ filter: getFilterStyle() }}
+                      crossOrigin="anonymous"
+                  />
+                  <canvas 
+                    ref={canvasRef} width={1024} height={1024}
+                    onPointerDown={e => { 
+                        if (activeTab !== 'eraser') return;
+                        setIsDrawing(true); 
+                        const {x,y} = getCoords(e); 
+                        const ctx=canvasRef.current.getContext('2d'); 
+                        ctx.beginPath(); 
+                        ctx.moveTo(x,y); 
+                        ctx.lineWidth=brushSize; 
+                        ctx.lineCap='round';
+                        ctx.lineJoin='round';
+                        ctx.strokeStyle='rgba(255, 50, 50, 0.7)'; 
+                    }}
+                    onPointerMove={e => { 
+                        if(!isDrawing || activeTab !== 'eraser') return; 
+                        const {x,y} = getCoords(e); 
+                        const ctx=canvasRef.current.getContext('2d'); 
+                        ctx.lineTo(x,y); 
+                        ctx.stroke(); 
+                    }}
+                    onPointerUp={() => setIsDrawing(false)}
+                    onPointerLeave={() => setIsDrawing(false)}
+                    className={`absolute inset-0 w-full h-full touch-none ${activeTab === 'eraser' ? 'cursor-crosshair opacity-100' : 'pointer-events-none opacity-0'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="h-64 bg-nano-100 border-t border-white/10 flex flex-col shrink-0 z-20">
+                <div className="flex border-b border-white/5">
+                  {[
+                    { id: 'eraser', icon: Lucide.Eraser, label: 'Magic Eraser' },
+                    { id: 'adjust', icon: Lucide.Sliders, label: 'Ajustes' },
+                    { id: 'filter', icon: Lucide.Wand2, label: 'Filtros' }
+                  ].map(t => (
+                    <button 
+                      key={t.id} 
+                      onClick={() => setActiveTab(t.id)} 
+                      className={`flex-1 py-5 flex items-center justify-center gap-3 text-[10px] uppercase font-black tracking-widest transition-all ${activeTab === t.id ? 'bg-white/5 border-b-2 border-emerald-500 text-white' : 'text-white/30 hover:bg-white/5 hover:text-white/60'}`}
+                    >
+                      <t.icon size={16} className={activeTab === t.id ? 'text-emerald-400' : ''} /> {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-8 h-full flex items-center justify-center overflow-hidden">
+                  {activeTab === 'adjust' && (
+                    <div className="w-full max-w-2xl grid grid-cols-2 gap-x-12 gap-y-6 animate-in fade-in slide-in-from-bottom-2">
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+                            <span className="flex items-center gap-2"><Lucide.Sun size={12}/> Brillo</span>
+                            <span>{brightness}%</span>
+                        </div>
+                        <input type="range" min="50" max="150" value={brightness} onChange={e => setBrightness(parseInt(e.target.value))} className="w-full" />
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+                            <span className="flex items-center gap-2"><Lucide.Contrast size={12}/> Contraste</span>
+                            <span>{contrast}%</span>
+                        </div>
+                        <input type="range" min="50" max="150" value={contrast} onChange={e => setContrast(parseInt(e.target.value))} className="w-full" />
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+                            <span className="flex items-center gap-2"><Lucide.Droplets size={12}/> Saturación</span>
+                            <span>{saturation}%</span>
+                        </div>
+                        <input type="range" min="0" max="200" value={saturation} onChange={e => setSaturation(parseInt(e.target.value))} className="w-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'filter' && (
+                    <div className="w-full h-full overflow-y-auto pr-2 custom-scrollbar animate-in fade-in">
+                        <div className="grid grid-cols-4 gap-3 pb-4">
+                          {IMAGE_FILTERS.map(f => (
+                             <button
+                                key={f.id}
+                                onClick={() => setActiveFilterId(f.id)}
+                                className={`
+                                    h-20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all
+                                    flex flex-col items-center justify-center gap-2 border
+                                    ${activeFilterId === f.id 
+                                        ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20 scale-105 ring-2 ring-white/20' 
+                                        : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20'}
+                                `}
+                             >
+                                <div className={`w-3 h-3 rounded-full ${activeFilterId === f.id ? 'bg-white' : 'bg-white/20'}`}></div>
+                                <span>{f.name}</span>
+                             </button>
+                          ))}
+                        </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'eraser' && (
+                    <div className="w-full max-w-xl flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="w-full bg-white/5 p-6 rounded-2xl flex items-center gap-8 border border-white/5">
+                            <div className="flex-grow space-y-3">
+                                <div className="flex justify-between text-[9px] font-black opacity-40 uppercase tracking-widest"><span>Pincel</span><span>{brushSize}px</span></div>
+                                <input type="range" min="10" max="150" value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))} className="w-full" />
+                            </div>
+                            <button onClick={() => canvasRef.current.getContext('2d').clearRect(0,0,1024,1024)} className="shrink-0 flex flex-col items-center gap-2 text-white/40 hover:text-red-400 transition-colors group">
+                                <Lucide.RotateCcw size={16} /> <span className="text-[8px] font-black uppercase tracking-widest">Deshacer</span>
+                            </button>
+                        </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // ... (Main App logic remains same, just calling MagicEraser)
+        const App = () => {
+          // ... (App State)
+          const [prompt, setPrompt] = useState('');
+          const [styleId, setStyleId] = useState(ART_STYLES[0].id);
+          const [aspect, setAspect] = useState('1:1');
+          
+          // Layout State
+          const [isCreativeOpen, setIsCreativeOpen] = useState(true);
+          const [isLabOpen, setIsLabOpen] = useState(false);
+
+          // Lab State
+          const [lightSource, setLightSource] = useState('auto');
+          const [lightDir, setLightDir] = useState('auto');
+          const [filterId, setFilterId] = useState('none');
+          const [creativity, setCreativity] = useState(60);
+          
+          const [status, setStatus] = useState('idle');
+          const [currentImg, setCurrentImg] = useState(null);
+          const [history, setHistory] = useState([]);
+          const [isEditing, setIsEditing] = useState(false);
+          const [uploadedImg, setUploadedImg] = useState(null);
+          
+          const fileInputRef = useRef(null);
+
+          const handleGenerate = async () => {
+            if (!prompt.trim() && !uploadedImg) return;
+            setStatus('generating');
+            try {
+              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+              const style = ART_STYLES.find(s => s.id === styleId);
+              const lSource = LIGHT_SOURCES.find(l => l.id === lightSource).prompt;
+              const lDir = LIGHT_DIRECTIONS.find(l => l.id === lightDir).prompt;
+              const filter = IMAGE_FILTERS.find(f => f.id === filterId).prompt;
+              
+              const fullPrompt = `Masterpiece photography: ${prompt || 'highly detailed artistic scene'}. Style: ${style.prompt}. Lighting: ${lSource} ${lDir}. ${filter}. 8k resolution, photorealistic, professional depth of field, sharp focus.`;
+              
+              const parts = [];
+              if (uploadedImg) {
+                parts.push({ 
+                  inlineData: { 
+                    mimeType: 'image/png', 
+                    data: uploadedImg.split(',')[1] 
+                  } 
+                });
+              }
+              parts.push({ text: fullPrompt });
+
+              const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts },
+                config: { 
+                    imageConfig: { aspectRatio: aspect }, 
+                    temperature: 0.1 + (creativity/100)*1.8 
+                }
+              });
+
+              for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                  const url = `data:image/png;base64,${part.inlineData.data}`;
+                  const item = { id: Date.now(), url, prompt };
+                  setCurrentImg(item);
+                  setHistory(prev => [item, ...prev].slice(0, 12));
+                  setStatus('success');
+                  return;
+                }
+              }
+              throw new Error("No image data in response");
+            } catch (e) { 
+              console.error("GENERATION ERROR:", e);
+              setStatus('error'); 
+            }
+          };
+
+          return (
+            <div className="h-screen flex flex-col bg-nano-50 text-white overflow-hidden">
+              <header className="h-20 glass px-8 flex items-center justify-between z-50 border-b border-white/5 shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-nano-50 shadow-2xl animate-float"><Lucide.Camera size={20}/></div>
+                  <h1 className="text-lg font-black uppercase tracking-tighter">Fotógrafo Todo en 1</h1>
+                </div>
+                <div className="flex gap-4 items-center">
+                  <Badge text="Gemini 2.5 Flash Image" />
+                </div>
+              </header>
+
+              <main className="flex-grow flex overflow-hidden">
+                {/* PANEL LATERAL */}
+                <aside className="w-[450px] border-r border-white/5 bg-nano-100/30 flex flex-col shrink-0 z-20 shadow-2xl h-full">
+                  
+                  {/* SCROLLABLE CONTENT */}
+                  <div className="flex-grow overflow-y-auto hide-scrollbar">
+                    
+                    {/* SECCIÓN CREATIVA */}
+                    <div className="border-b border-white/5">
+                        <button 
+                            onClick={() => setIsCreativeOpen(!isCreativeOpen)}
+                            className="w-full flex items-center justify-between p-6 bg-white/[0.02] hover:bg-white/5 transition-all group sticky top-0 z-10 backdrop-blur-md"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isCreativeOpen ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-white/20'}`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80 group-hover:text-white transition-colors">Controles Creativos</span>
+                            </div>
+                            {isCreativeOpen ? <Lucide.ChevronDown size={14} className="text-emerald-500"/> : <Lucide.ChevronRight size={14} className="text-white/30 group-hover:text-white"/>}
+                        </button>
+
+                        {isCreativeOpen && (
+                            <div className="p-8 space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Visión Visual</label>
+                                        <Lucide.Info size={14} className="text-white/20" />
+                                    </div>
+                                    <textarea value={prompt} onChange={e => setPrompt(e.target.value)} className="w-full h-40 p-6 bg-white/5 border border-white/10 rounded-[2.5rem] outline-none focus:ring-1 focus:ring-emerald-500 transition-all resize-none text-[15px] leading-relaxed placeholder:text-white/20" placeholder="Describe una escena fotográfica con detalle..." />
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Matriz de Estilos</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {ART_STYLES.map(s => (
+                                            <button key={s.id} onClick={() => setStyleId(s.id)} className={`h-24 rounded-[2rem] p-4 text-left relative overflow-hidden transition-all duration-300 bg-gradient-to-br ${s.gradient} ${styleId === s.id ? 'ring-2 ring-white scale-105 z-10 shadow-xl' : 'opacity-40 grayscale hover:opacity-100 hover:grayscale-0'}`}>
+                                                <span className={`absolute bottom-3 left-4 text-[10px] font-black uppercase tracking-wider ${s.gradient.includes('text-white') ? 'text-white' : 'text-nano-50'}`}>{s.name}</span>
+                                                {styleId === s.id && <div className="absolute top-3 right-4 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-lg"><Lucide.Check className="text-nano-50" size={10} strokeWidth={4}/></div>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* SECCIÓN LABORATORIO */}
+                    <div className="border-b border-white/5">
+                        <button 
+                            onClick={() => setIsLabOpen(!isLabOpen)}
+                            className="w-full flex items-center justify-between p-6 bg-white/[0.02] hover:bg-white/5 transition-all group sticky top-0 z-10 backdrop-blur-md"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${isLabOpen ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-white/20'}`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80 group-hover:text-white transition-colors">Laboratorio Avanzado</span>
+                            </div>
+                            {isLabOpen ? <Lucide.ChevronDown size={14} className="text-emerald-500"/> : <Lucide.ChevronRight size={14} className="text-white/30 group-hover:text-white"/>}
+                        </button>
+
+                        {isLabOpen && (
+                            <div className="p-8 space-y-8 animate-in fade-in slide-in-from-top-2 duration-300 bg-black/20">
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Referencia Óptica</label>
+                                    <div onClick={() => !uploadedImg && fileInputRef.current.click()} className="h-40 border-2 border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/5 hover:border-emerald-500 transition-all overflow-hidden group relative">
+                                        {uploadedImg ? (
+                                            <>
+                                                <img src={uploadedImg} className="h-full w-full object-cover opacity-60 group-hover:opacity-40 transition-opacity"/>
+                                                <div className="absolute z-10 flex flex-col items-center gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); fileInputRef.current.click(); }} className="p-2 bg-black/50 rounded-full text-white backdrop-blur-md hover:bg-black/70"><Lucide.Edit2 size={16}/></button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <><Lucide.Upload className="text-white/20 group-hover:text-emerald-500" size={32}/><span className="text-[10px] font-black uppercase text-white/20 tracking-widest">Cargar Referencia</span></>
+                                        )}
+                                    </div>
+                                    <input ref={fileInputRef} type="file" className="hidden" onChange={e => { const f=e.target.files[0]; if(f){ const r=new FileReader(); r.onload=ev=>setUploadedImg(ev.target.result); r.readAsDataURL(f); } }} />
+                                    {uploadedImg && <button onClick={() => { setUploadedImg(null); if(fileInputRef.current) fileInputRef.current.value=''; }} className="w-full text-center text-[9px] text-red-400 font-bold uppercase tracking-widest hover:text-red-300">Eliminar Referencia</button>}
+                                </div>
+
+                                {/* ... (Other Lab controls remain the same) ... */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-3">
+                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Fuente Luz</label>
+                                        <div className="relative group">
+                                            <select value={lightSource} onChange={e => setLightSource(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer appearance-none">
+                                                {LIGHT_SOURCES.map(l => <option key={l.id} value={l.id} className="bg-nano-100">{l.label}</option>)}
+                                            </select>
+                                            <Lucide.ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"/>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Dirección</label>
+                                        <div className="relative group">
+                                            <select value={lightDir} onChange={e => setLightDir(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer appearance-none">
+                                                {LIGHT_DIRECTIONS.map(l => <option key={l.id} value={l.id} className="bg-nano-100">{l.label}</option>)}
+                                            </select>
+                                            <Lucide.ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none"/>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-[11px] font-black uppercase tracking-[0.4em] text-white/30">Geometría del Lienzo</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {ASPECT_RATIOS.map(r => (
+                                            <button key={r.id} onClick={() => setAspect(r.id)} className={`p-4 rounded-xl border flex flex-col items-center gap-3 transition-all ${aspect === r.id ? 'bg-white text-nano-50 border-white shadow-xl scale-105 z-10 ring-2 ring-emerald-500 ring-offset-2 ring-offset-nano-100' : 'bg-white/5 border-white/5 text-white/30 hover:bg-white/10'}`}>
+                                                <div className={`border-2 rounded-[1px] ${r.shape} ${aspect === r.id ? 'border-nano-50' : 'border-current opacity-40'}`}></div>
+                                                <span className="text-[7px] font-black">{r.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between text-[11px] font-black uppercase tracking-[0.4em] text-white/30"><span>Creatividad</span><span>{creativity}%</span></div>
+                                    <input type="range" min="0" max="100" value={creativity} onChange={e => setCreativity(e.target.value)} className="w-full" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                  </div>
+
+                  {/* FIXED FOOTER */}
+                  <div className="p-8 border-t border-white/5 bg-nano-100/80 backdrop-blur-xl shrink-0 z-20">
+                    <button 
+                      onClick={handleGenerate} 
+                      disabled={status === 'generating'} 
+                      className="w-full h-20 bg-emerald-500 hover:bg-emerald-400 text-white rounded-[2.5rem] flex items-center justify-center gap-4 font-black uppercase tracking-[0.5em] shadow-2xl shadow-emerald-500/20 active:scale-95 disabled:opacity-30 disabled:grayscale transition-all relative overflow-hidden group"
+                    >
+                      <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                      <div className="relative flex items-center gap-4 z-10">
+                        {status === 'generating' ? <Lucide.RefreshCw className="animate-spin" size={24}/> : <Lucide.Zap fill="white" size={24}/>}
+                        {status === 'generating' ? 'Sintetizando' : 'Disparar'}
+                      </div>
+                    </button>
+                  </div>
+                </aside>
+
+                {/* VISOR PRINCIPAL */}
+                <section className="flex-grow relative flex items-center justify-center bg-nano-50 p-12 overflow-hidden">
+                  <div className="absolute inset-0 opacity-10 pointer-events-none">
+                    <div className="absolute top-1/3 left-1/3 w-[800px] h-[800px] bg-emerald-500/10 blur-[250px] rounded-full animate-pulse"></div>
+                  </div>
+
+                  {status === 'generating' ? (
+                    <div className="text-center space-y-8 z-10 animate-in fade-in zoom-in duration-500">
+                      <div className="w-24 h-24 border-[6px] border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin mx-auto shadow-2xl shadow-emerald-500/20"></div>
+                      <p className="text-[14px] font-black uppercase tracking-[0.8em] text-emerald-400">Capturando Fotones</p>
+                    </div>
+                  ) : currentImg ? (
+                    <div className="w-full h-full relative group animate-in zoom-in-95 duration-700">
+                      <ZoomableImage src={currentImg.url} />
+                      <div className="absolute top-10 right-10 flex flex-col gap-5 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                         <button onClick={() => setIsEditing(true)} className="p-5 bg-white text-nano-50 rounded-[1.5rem] shadow-2xl hover:scale-110 active:scale-95 transition-all"><Lucide.Eraser size={24}/></button>
+                         <button onClick={() => { const a=document.createElement('a'); a.href=currentImg.url; a.download='ai-photo.png'; a.click(); }} className="p-5 bg-emerald-500 text-white rounded-[1.5rem] shadow-2xl hover:scale-110 active:scale-95 transition-all"><Lucide.Download size={24}/></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center opacity-10 space-y-8 animate-in fade-in duration-1000">
+                      <Lucide.Telescope size={150} className="mx-auto" strokeWidth={1} />
+                      <p className="text-[14px] font-black uppercase tracking-[0.6em]">Lienzo en Espera</p>
+                    </div>
+                  )}
+
+                  {history.length > 0 && (
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-5 glass p-4 rounded-[2.5rem] max-w-[85%] overflow-x-auto hide-scrollbar scroll-smooth">
+                      {history.map(img => (
+                        <button key={img.id} onClick={() => setCurrentImg(img)} className={`w-20 h-20 rounded-3xl overflow-hidden border-2 flex-shrink-0 transition-all duration-500 ${currentImg?.id === img.id ? 'border-emerald-500 scale-110 shadow-xl' : 'border-transparent opacity-40 grayscale hover:opacity-100 hover:grayscale-0'}`}>
+                          <img src={img.url} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </main>
+
+              {isEditing && currentImg && (
+                <MagicEraser 
+                  src={currentImg.url} 
+                  onSave={url => { setCurrentImg({...currentImg, url}); setIsEditing(false); }} 
+                  onCancel={() => setIsEditing(false)} 
+                />
+              )}
+            </div>
+          );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
